@@ -31,6 +31,10 @@
 		{ label: "esc", key: "Escape", code: "Escape", keyCode: 27 },
 		{ label: "tab", key: "Tab", code: "Tab", keyCode: 9 },
 		{ label: "ctrl", modifier: "ctrl" },
+		// Atalhos do workbench (⌘P, ⌘S, ⌘B) resolvem CtrlCmd como Meta no iOS,
+		// entao `ctrl` sozinho nao os alcanca — ele serve pro terminal, onde
+		// Ctrl e Ctrl de verdade. As duas teclas existem por motivos distintos.
+		{ label: "cmd", modifier: "meta" },
 		{ label: "alt", modifier: "alt" },
 		{ label: "◀", key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
 		{ label: "▼", key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
@@ -270,6 +274,97 @@
 		return bar && bar.offsetHeight ? bar.offsetHeight : 52
 	}
 
+	/**
+	 * The modifier that VS Code's `CtrlCmd` resolves to here. It is Meta on Apple
+	 * platforms and Control everywhere else, and iOS counts as Apple — so a
+	 * workbench keybinding written as CtrlCmd+B is Cmd+B on the iPhone. Sending
+	 * ctrlKey there does nothing at all.
+	 */
+	function ctrlCmd() {
+		// Both strings, not one falling back to the other: navigator.platform is
+		// non-empty on every engine, so `platform || userAgent` would never reach
+		// the userAgent — and it is the userAgent that carries "iPhone" when the
+		// platform string does not.
+		const apple = /Mac|iPhone|iPad|iPod/.test(navigator.platform + " " + navigator.userAgent)
+		return apple ? { metaKey: true } : { ctrlKey: true }
+	}
+
+	/**
+	 * Dispatch a chord straight to the workbench, bypassing the bar's sticky
+	 * modifier state (which sendKey folds in, and which must not leak into a
+	 * keystroke the user did not press).
+	 */
+	function sendChord(spec) {
+		const target = document.querySelector(".monaco-workbench") || document.body
+		const init = {
+			key: spec.key,
+			code: spec.code,
+			keyCode: spec.keyCode,
+			which: spec.keyCode,
+			ctrlKey: !!spec.ctrlKey,
+			altKey: !!spec.altKey,
+			shiftKey: !!spec.shiftKey,
+			metaKey: !!spec.metaKey,
+			bubbles: true,
+			cancelable: true,
+			composed: true,
+		}
+		for (const type of ["keydown", "keyup"]) {
+			const event = new KeyboardEvent(type, init)
+			Object.defineProperty(event, "keyCode", { get: () => spec.keyCode })
+			Object.defineProperty(event, "which", { get: () => spec.keyCode })
+			target.dispatchEvent(event)
+		}
+	}
+
+	/**
+	 * Collapse the side bar the first time the workbench opens on a narrow
+	 * screen. At 390px the explorer takes 170px of a 390px viewport, leaving the
+	 * editor too narrow to read code in.
+	 *
+	 * Done by firing ctrl+b (workbench.action.toggleSidebarVisibility) rather
+	 * than by hiding the part in CSS: the workbench lays out through a grid whose
+	 * track sizes it owns, so hiding a part behind its back leaves the freed
+	 * space empty instead of giving it to the editor. Going through the
+	 * keybinding lets the layout engine reflow on its own terms.
+	 *
+	 * Once only, recorded in localStorage. VS Code already persists side bar
+	 * visibility per workspace, so this is a first-run nudge — reopening the
+	 * explorer afterwards is a choice we must not keep overriding on every load.
+	 */
+	function nudgeNarrowLayout() {
+		const KEY = "cs-mobile-sidebar-nudged"
+		if (window.innerWidth > 600) {
+			return
+		}
+		try {
+			if (localStorage.getItem(KEY)) {
+				return
+			}
+		} catch (e) {
+			return // Private mode with storage denied: skip rather than nag every load.
+		}
+
+		// The workbench mounts well after DOMContentLoaded, so wait for the part
+		// to exist and have been given a width before deciding anything.
+		let tries = 0
+		const timer = setInterval(() => {
+			const sidebar = document.querySelector(".part.sidebar")
+			const visible = sidebar && sidebar.getBoundingClientRect().width > 0
+			if (visible) {
+				clearInterval(timer)
+				try {
+					localStorage.setItem(KEY, "1")
+				} catch (e) {
+					/* best effort */
+				}
+				sendChord(Object.assign({ key: "b", code: "KeyB", keyCode: 66 }, ctrlCmd()))
+			} else if (++tries > 40) {
+				clearInterval(timer)
+			}
+		}, 500)
+	}
+
 	function init() {
 		// Gate for every touch-only rule in the stylesheets. Set from JS rather
 		// than with a media query so that the CSS cannot apply on a desktop
@@ -278,6 +373,7 @@
 		document.body.classList.add("cs-mobile-touch")
 		build()
 		trackViewport()
+		nudgeNarrowLayout()
 	}
 
 	if (document.readyState === "loading") {
