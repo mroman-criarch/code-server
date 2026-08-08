@@ -1,0 +1,79 @@
+/*
+ * Accessory key bar for touch devices. Docked to the top edge of the software
+ * keyboard by mobile-keyboard.js, which sets the translateY offset.
+ */
+
+.cs-mobile-keyboard {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 1000;
+
+	display: none;
+	gap: 4px;
+	padding: 6px 8px;
+	/* Keep the last keys clear of the iPhone home indicator. */
+	padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+
+	overflow-x: auto;
+	overflow-y: hidden;
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: none;
+
+	/* Inherit the workbench theme instead of hardcoding a palette, so the bar
+	   matches whichever color theme the user has active. */
+	background: var(--vscode-editorWidget-background, #252526);
+	border-top: 1px solid var(--vscode-editorWidget-border, #454545);
+
+	/* The bar must never eat a swipe meant for the workbench. */
+	touch-action: pan-x;
+}
+
+.cs-mobile-keyboard::-webkit-scrollbar {
+	display: none;
+}
+
+body.cs-mobile-keyboard-visible .cs-mobile-keyboard {
+	display: flex;
+}
+
+.cs-mobile-keyboard__key {
+	flex: 0 0 auto;
+	min-width: 42px;
+	/* 40px keeps every key at or above the iOS minimum touch target. */
+	height: 40px;
+	padding: 0 10px;
+
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-size: 15px;
+	line-height: 1;
+
+	color: var(--vscode-button-secondaryForeground, #cccccc);
+	background: var(--vscode-button-secondaryBackground, #3a3d41);
+	border: none;
+	border-radius: 6px;
+
+	/* Suppress the iOS tap flash and text selection on long press. */
+	-webkit-tap-highlight-color: transparent;
+	-webkit-user-select: none;
+	user-select: none;
+	cursor: pointer;
+}
+
+.cs-mobile-keyboard__key:active {
+	background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+/* Armed: applies to the next keystroke only. */
+.cs-mobile-keyboard__key.is-armed {
+	color: var(--vscode-button-foreground, #ffffff);
+	background: var(--vscode-button-background, #0e639c);
+}
+
+/* Locked: stays active until tapped again. */
+.cs-mobile-keyboard__key.is-locked {
+	color: var(--vscode-button-foreground, #ffffff);
+	background: var(--vscode-button-background, #0e639c);
+	box-shadow: inset 0 -3px 0 var(--vscode-focusBorder, #007fd4);
+}

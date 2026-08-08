@@ -1,0 +1,20 @@
+Index: code-server-mobile/lib/vscode/src/vs/code/browser/workbench/workbench.html
+===================================================================
+--- code-server-mobile.orig/lib/vscode/src/vs/code/browser/workbench/workbench.html
++++ code-server-mobile/lib/vscode/src/vs/code/browser/workbench/workbench.html
+@@ -14,8 +14,13 @@
+ 		<link rel="apple-touch-icon" sizes="192x192" href="{{BASE}}/_static/src/browser/media/pwa-icon-192.png" />
+ 		<link rel="apple-touch-icon" sizes="512x512" href="{{BASE}}/_static/src/browser/media/pwa-icon-512.png" />
+ 
+-		<!-- Disable pinch zooming -->
+-		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
++		<!-- Disable pinch zooming. viewport-fit=cover lets the accessory key bar
++		     use env(safe-area-inset-*) so it clears the iPhone home indicator. -->
++		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
++
++		<!-- Accessory key bar for touch devices with no physical keyboard -->
++		<link rel="stylesheet" href="{{BASE}}/_static/src/browser/media/mobile-keyboard.css" />
++		<script defer src="{{BASE}}/_static/src/browser/media/mobile-keyboard.js"></script>
+ 
+ 		<!-- Workbench Configuration -->
+ 		<meta id="vscode-workbench-web-configuration" data-settings="{{WORKBENCH_WEB_CONFIGURATION}}">
