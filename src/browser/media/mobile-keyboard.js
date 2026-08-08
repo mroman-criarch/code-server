@@ -271,6 +271,11 @@
 	}
 
 	function init() {
+		// Gate for every touch-only rule in the stylesheets. Set from JS rather
+		// than with a media query so that the CSS cannot apply on a desktop
+		// browser that merely reports a coarse pointer — this script has already
+		// decided, above, that this is a touch-only device.
+		document.body.classList.add("cs-mobile-touch")
 		build()
 		trackViewport()
 	}

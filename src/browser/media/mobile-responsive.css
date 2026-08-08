@@ -1,0 +1,96 @@
+/*
+ * Touch adjustments for phone-sized screens.
+ *
+ * Everything here hangs off `body.cs-mobile-touch`, which mobile-keyboard.js
+ * adds only on devices with no fine pointer. A plain media query would also
+ * catch a desktop browser on a touchscreen monitor, where the real keyboard and
+ * mouse are still in play and none of this is wanted.
+ *
+ * Scope note: these rules deliberately avoid anything the workbench sizes in
+ * JavaScript — list row heights, part geometry, scrollbar hit areas. Those are
+ * measured and written back as inline pixels, so CSS that changes them puts the
+ * layout engine out of step with what is on screen (virtualised lists start
+ * scrolling to the wrong offsets). What is left is the safe surface: gestures,
+ * font sizes, and affordances that only exist on hover.
+ */
+
+/* ── Gestos que o Safari rouba ─────────────────────────────────────────── */
+
+/*
+ * Pull-to-refresh reloads the IDE. On a page that is a long-lived editing
+ * session that is close to hostile: a slightly over-enthusiastic scroll at the
+ * top of a file throws away the window. `contain` keeps the scroll chain inside
+ * the workbench without disabling scrolling itself.
+ */
+html,
+body.cs-mobile-touch {
+	overscroll-behavior: contain;
+}
+
+body.cs-mobile-touch .monaco-workbench {
+	/*
+	 * iOS pops its own callout (Copy / Look Up / Share) on long press, which is
+	 * the same gesture the workbench uses for context menus — the system menu
+	 * wins and the editor's never opens.
+	 */
+	-webkit-touch-callout: none;
+
+	/* The grey flash on every tap reads as lag on a UI this dense. */
+	-webkit-tap-highlight-color: transparent;
+
+	/*
+	 * Safari inflates font sizes of its own accord when a page rotates to
+	 * landscape, which desynchronises Monaco's measured character width from
+	 * what is painted and leaves the caret drifting off the glyphs.
+	 */
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+/* ── Zoom automático do iOS ────────────────────────────────────────────── */
+
+/*
+ * Safari zooms the whole page in when a text field with a font smaller than
+ * 16px takes focus, and never zooms back out — one tap on the command palette
+ * and the workbench is left scaled and half off-screen. 16px is the threshold,
+ * not a preference.
+ *
+ * Restricted to the chrome's own text fields. Monaco's `.inputarea` and xterm's
+ * helper textarea are hidden inputs parked at the caret, sized to drive IME
+ * positioning; resizing those moves the composition popup and can scroll the
+ * editor on focus.
+ */
+body.cs-mobile-touch .monaco-inputbox input,
+body.cs-mobile-touch .monaco-inputbox textarea,
+body.cs-mobile-touch .quick-input-box input,
+body.cs-mobile-touch .monaco-findInput input,
+body.cs-mobile-touch .suggest-input-container input,
+body.cs-mobile-touch .settings-search-input input {
+	font-size: 16px !important;
+}
+
+/* ── Afordâncias que só existem no hover ───────────────────────────────── */
+
+/*
+ * There is no hover on a touchscreen: `:hover` fires only after a tap, i.e.
+ * after the tap has already gone somewhere else. Anything revealed on hover is
+ * therefore unreachable, so it is shown outright. The cost is visual noise; the
+ * alternative is functionality that cannot be reached at all.
+ */
+body.cs-mobile-touch .monaco-workbench .tab .tab-actions,
+body.cs-mobile-touch .monaco-workbench .pane-header .actions,
+body.cs-mobile-touch .monaco-workbench .composite.title .title-actions,
+body.cs-mobile-touch .monaco-workbench .monaco-list-row .actions {
+	opacity: 1 !important;
+	visibility: visible !important;
+}
+
+/*
+ * Close buttons are the smallest targets in the workbench and the most costly
+ * to miss — a missed tap on a tab's close button switches tabs instead. This
+ * grows the tap area without changing the tab strip's height, which the layout
+ * engine measures.
+ */
+body.cs-mobile-touch .monaco-workbench .tab .tab-actions .action-label {
+	padding: 6px;
+}

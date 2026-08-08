@@ -3,6 +3,11 @@
  * keyboard by mobile-keyboard.js, which sets the translateY offset.
  */
 
+/* Ajustes de toque que não dependem do teclado. Arquivo separado porque
+   mexe em outra coisa; importado aqui pra não precisar de outro <link> no
+   patch do workbench.html (que exigiria recompilar o VS Code). */
+@import url("./mobile-responsive.css");
+
 :root {
 	/* Height occluded by the software keyboard plus the bar. Kept in sync by
 	   mobile-keyboard.js; zero whenever the keyboard is closed. */
@@ -10,12 +15,31 @@
 }
 
 /*
- * Shrink the workbench so its bottom rows are not hidden behind the keyboard.
- * iOS does not reflow the page on its own, so without this the line you are
- * typing in the terminal is exactly the line you cannot see.
+ * Fit the workbench between the notch, the home indicator and the software
+ * keyboard.
+ *
+ * Sizing happens here rather than with padding because the workbench parts are
+ * absolutely positioned in pixels by the layout engine, which measures the
+ * workbench element itself — padding would move the children out of step with
+ * the measured box. mobile-keyboard.js fires a resize whenever the inset
+ * changes so the engine re-measures.
+ *
+ * viewport-fit=cover (workbench.html patch) is what lets the page run under the
+ * notch and the home indicator in the first place. In Safari the browser chrome
+ * absorbs those areas and the insets resolve to zero; it is the PWA launched
+ * from the home screen — no chrome at all — that actually needs this.
+ *
+ * max(): while the keyboard is open its inset already covers the home
+ * indicator, because the key bar pads itself with safe-area-inset-bottom.
  */
-body.cs-mobile-keyboard-visible .monaco-workbench {
-	height: calc(100% - var(--cs-keyboard-inset)) !important;
+body.cs-mobile-touch .monaco-workbench {
+	margin-top: env(safe-area-inset-top, 0px);
+	margin-left: env(safe-area-inset-left, 0px);
+	width: calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
+	height: calc(
+		100% - env(safe-area-inset-top, 0px) -
+			max(env(safe-area-inset-bottom, 0px), var(--cs-keyboard-inset))
+	) !important;
 }
 
 .cs-mobile-keyboard {
