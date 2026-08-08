@@ -19,6 +19,74 @@
 		return
 	}
 
+	/**
+	 * Settings that apply on this device only.
+	 *
+	 * code-server keeps one settings.json per user, not per device, so writing
+	 * these there would reshape the desktop too — and the desktop wants the
+	 * stock layout. They are injected instead as `configurationDefaults` on the
+	 * workbench construction options, which VS Code reads out of the
+	 * vscode-workbench-web-configuration meta tag when it boots.
+	 *
+	 * Being defaults and not settings, anything the user has actually set in
+	 * settings.json still wins — these only fill gaps, and only here.
+	 *
+	 * Timing is the whole trick: this runs at script evaluation time, and this
+	 * file is a `defer` script that appears in workbench.html before the
+	 * workbench's own module. Deferred and module scripts run in document order,
+	 * so this lands after the meta tag is parsed but before anything reads it.
+	 * Moving this into DOMContentLoaded would be too late — the workbench has
+	 * already booted by then.
+	 */
+	const MOBILE_DEFAULTS = {
+		// A 390px viewport has no usable horizontal scroll.
+		"editor.wordWrap": "on",
+		// Icons move into the title strip, which already exists: 48px of width
+		// back at no cost in height.
+		"workbench.activityBar.location": "top",
+		// The chat panel takes ~140px of the same 390.
+		"workbench.secondarySideBar.defaultVisibility": "hidden",
+		// The welcome page fills the whole viewport on a phone.
+		"workbench.startupEditor": "none",
+		// The Restricted Mode banner costs 26px of a screen that has none to
+		// spare, and the trust prompt is friction on a touchscreen. Scoped here
+		// rather than passed as --disable-workspace-trust, which is a server
+		// flag and would drop the prompt on the desktop too.
+		"security.workspace.trust.enabled": false,
+		// Keeps the caret off the bottom edge, where the keyboard sits.
+		"editor.cursorSurroundingLines": 4,
+		// Dragging is how text is selected on a touchscreen; with drag and drop
+		// on, the gesture moves the selection instead.
+		"editor.dragAndDrop": false,
+		// No hover on touch, so the glyph margin only costs scarce width.
+		"editor.glyphMargin": false,
+		// One tap opens the file for good, instead of the italic preview that
+		// the next tap replaces — touch has no double click to confirm with.
+		"workbench.editor.enablePreview": false,
+		// Thin scrollbars are not touch targets.
+		"editor.scrollbar.verticalScrollbarSize": 18,
+		"editor.scrollbar.horizontalScrollbarSize": 18,
+		"editor.smoothScrolling": true,
+		"workbench.list.smoothScrolling": true,
+		"terminal.integrated.smoothScrolling": true,
+	}
+
+	function applyMobileDefaults() {
+		const el = document.getElementById("vscode-workbench-web-configuration")
+		if (!el) {
+			return
+		}
+		try {
+			const config = JSON.parse(el.getAttribute("data-settings"))
+			config.configurationDefaults = Object.assign({}, config.configurationDefaults, MOBILE_DEFAULTS)
+			el.setAttribute("data-settings", JSON.stringify(config))
+		} catch (e) {
+			/* Boot the workbench with what it shipped rather than a broken config. */
+		}
+	}
+
+	applyMobileDefaults()
+
 	/** Keys that are held down and applied to the next keystroke. */
 	const MODIFIERS = ["ctrl", "alt", "shift", "meta"]
 
@@ -405,17 +473,207 @@
 	 * Meta on iOS.
 	 */
 	const NAV = [
-		{ label: "arquivos", icon: "files", key: "E", code: "KeyE", keyCode: 69, shiftKey: true },
-		{ label: "buscar", icon: "search", key: "F", code: "KeyF", keyCode: 70, shiftKey: true },
+		// Alternam: tocar de novo na view que ja esta aberta fecha o drawer, que
+		// e o que uma tab bar faz. Sem isso a unica saida seria o ctrl+b, que
+		// nao existe sem teclado.
+		{
+			label: "arquivos",
+			icon: "files",
+			run: () => toggleSidebarView("workbench.view.explorer", { key: "E", code: "KeyE", keyCode: 69 }),
+		},
+		{
+			label: "buscar",
+			icon: "search",
+			run: () => toggleSidebarView("workbench.view.search", { key: "F", code: "KeyF", keyCode: 70 }),
+		},
 		{ label: "abrir", icon: "go-to-file", key: "P", code: "KeyP", keyCode: 80 },
-		// Excecao: o toggle do terminal e Control+` mesmo em plataforma Apple —
-		// no macOS esse atalho nunca foi Cmd. Como no Linux tambem e Control,
-		// aqui a tecla e fixa em vez de sair do ctrlCmd().
-		{ label: "terminal", icon: "terminal", key: "`", code: "Backquote", keyCode: 192, ctrl: true },
+		{ label: "pasta", icon: "folder-opened", run: () => runCommandByName("Open Folder") },
+		// Abre maximizado, entao tem logica propria em vez de um chord direto.
+		{ label: "terminal", icon: "terminal", run: () => toggleTerminal() },
+		// claude-vscode.editor.open, da extensao anthropic.claude-code. Abre numa
+		// aba do editor — no celular isso e a tela inteira, ao contrario da side
+		// bar. O keybinding e literalmente `cmd+shift+escape`, entao o modificador
+		// e Meta fixo e nao o ctrlCmd(): em plataforma nao-Apple o `cmd` dessa
+		// extensao resolve pra Meta do mesmo jeito.
+		{
+			label: "claude",
+			icon: "sparkle",
+			key: "Escape",
+			code: "Escape",
+			keyCode: 27,
+			shiftKey: true,
+			meta: true,
+		},
 		{ label: "comandos", icon: "menu", key: "P", code: "KeyP", keyCode: 80, shiftKey: true },
 	]
 
 	let nav = null
+
+	/**
+	 * Maximize the panel so the terminal fills the screen instead of sitting in a
+	 * third of it. There is no keybinding for this one, so the panel's own title
+	 * bar action is clicked — the same thing a mouse would do.
+	 *
+	 * The button is matched by icon first and label second: the label is
+	 * localized and would stop matching under a different display language,
+	 * while the codicon is not. Whichever matches, doing nothing is safe — the
+	 * terminal just opens at its normal height.
+	 */
+	function maximizePanel() {
+		const actions = [...document.querySelectorAll(".part.panel .composite.title .action-label")]
+		const button = actions.find((a) => {
+			if (/chevron-up|screen-full/.test(a.className || "")) {
+				return true
+			}
+			return /^maximize/i.test(a.getAttribute("aria-label") || a.title || "")
+		})
+		if (button) {
+			button.click()
+		}
+	}
+
+	/**
+	 * Open the terminal full screen, or close it if it is already open.
+	 *
+	 * Maximizing has to wait for the panel to exist, because the toggle is
+	 * asynchronous and the title bar actions are built with the panel.
+	 */
+	function toggleTerminal() {
+		const panel = document.querySelector(".part.panel")
+		const wasOpen = panel && panel.getBoundingClientRect().height > 0
+
+		sendChord({ key: "`", code: "Backquote", keyCode: 192, ctrlKey: true })
+
+		if (wasOpen) {
+			return
+		}
+
+		let tries = 0
+		const timer = setInterval(() => {
+			const part = document.querySelector(".part.panel")
+			if (part && part.getBoundingClientRect().height > 0) {
+				clearInterval(timer)
+				maximizePanel()
+			} else if (++tries > 25) {
+				clearInterval(timer)
+			}
+		}, 150)
+	}
+
+	/**
+	 * Run a command by name, through the command palette.
+	 *
+	 * The escape hatch for commands with no usable keybinding — "Open Folder" is
+	 * bound to the chord ctrl+k ctrl+o, which does not survive being synthesised,
+	 * and there is no single-chord alternative.
+	 *
+	 * The `>` prefix is what puts the quick input in command mode; without it the
+	 * same widget searches files, because assigning to value wipes the prefix the
+	 * palette would have inserted. Assignment goes through the prototype setter
+	 * so that the framework's own input tracking sees the change.
+	 *
+	 * Fragile in one specific way: it accepts the first match, so a display
+	 * language other than English would run whatever else came first. Worth it
+	 * only because there is no other route to this command.
+	 */
+	function runCommandByName(query) {
+		sendChord(Object.assign({ key: "p", code: "KeyP", keyCode: 80 }, ctrlCmd()))
+
+		let tries = 0
+		const timer = setInterval(() => {
+			const input = document.querySelector(".quick-input-widget .monaco-inputbox input")
+			if (!input) {
+				if (++tries > 30) {
+					clearInterval(timer)
+				}
+				return
+			}
+			clearInterval(timer)
+
+			const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set
+			setter.call(input, ">" + query)
+			input.dispatchEvent(new Event("input", { bubbles: true }))
+
+			// Let the list filter before accepting whatever ended up on top.
+			setTimeout(() => {
+				const init = {
+					key: "Enter",
+					code: "Enter",
+					keyCode: 13,
+					which: 13,
+					bubbles: true,
+					cancelable: true,
+					composed: true,
+				}
+				for (const type of ["keydown", "keyup"]) {
+					const event = new KeyboardEvent(type, init)
+					Object.defineProperty(event, "keyCode", { get: () => 13 })
+					Object.defineProperty(event, "which", { get: () => 13 })
+					input.dispatchEvent(event)
+				}
+			}, 500)
+		}, 100)
+	}
+
+	/**
+	 * Show a side bar view, or close the drawer if that view is already the one
+	 * showing — the behaviour of a tab bar, where the active tab tapped again
+	 * dismisses.
+	 *
+	 * Which view is up is read from the viewlet element's id
+	 * (workbench.view.explorer and friends), which is stable and not localized,
+	 * unlike the visible title. Tapping "buscar" while the explorer is open
+	 * therefore switches views instead of closing, which is what a tab bar does.
+	 */
+	function toggleSidebarView(viewletId, chord) {
+		const sidebar = document.querySelector(".part.sidebar")
+		const open = sidebar && sidebar.getBoundingClientRect().width > 0
+		const current = document.querySelector(".part.sidebar .composite.viewlet")
+
+		if (open && current && current.id === viewletId) {
+			sendChord(Object.assign({ key: "b", code: "KeyB", keyCode: 66 }, ctrlCmd()))
+			return
+		}
+
+		sendChord(Object.assign({ shiftKey: true }, chord, ctrlCmd()))
+	}
+
+	/**
+	 * Get the explorer out of the way once it has done its job.
+	 *
+	 * On a phone the side bar is not a column beside the editor, it is a drawer
+	 * over it: with it open the editor keeps 220px of a 390px screen. Opening a
+	 * file is the moment the drawer is done.
+	 *
+	 * Folders are skipped — tapping one is navigation inside the drawer, not the
+	 * end of it. They are told apart by the folder-icon class the explorer puts
+	 * on the row's icon label; aria-expanded is not the discriminator it looks
+	 * like, since the tree sets it on every row it can render. Capture phase,
+	 * because the tree stops propagation on its own rows.
+	 */
+	function closeSidebarOnFileOpen() {
+		document.addEventListener(
+			"pointerdown",
+			(event) => {
+				const sidebar = document.querySelector(".part.sidebar")
+				if (!sidebar || !sidebar.contains(event.target)) {
+					return
+				}
+				const row = event.target.closest && event.target.closest(".monaco-list-row")
+				if (!row || row.querySelector(".monaco-icon-label.folder-icon")) {
+					return
+				}
+				// Let the editor actually open before the layout moves under it.
+				setTimeout(() => {
+					const part = document.querySelector(".part.sidebar")
+					if (part && part.getBoundingClientRect().width > 0) {
+						sendChord(Object.assign({ key: "b", code: "KeyB", keyCode: 66 }, ctrlCmd()))
+					}
+				}, 350)
+			},
+			true,
+		)
+	}
 
 	function buildNav() {
 		nav = document.createElement("nav")
@@ -443,6 +701,10 @@
 				"pointerdown",
 				(event) => {
 					event.preventDefault()
+					if (item.run) {
+						item.run()
+						return
+					}
 					sendChord(
 						Object.assign(
 							{
@@ -451,7 +713,7 @@
 								keyCode: item.keyCode,
 								shiftKey: !!item.shiftKey,
 							},
-							item.ctrl ? { ctrlKey: true } : ctrlCmd(),
+							item.meta ? { metaKey: true } : ctrlCmd(),
 						),
 					)
 				},
@@ -474,6 +736,7 @@
 		buildNav()
 		trackViewport()
 		nudgeNarrowLayout()
+		closeSidebarOnFileOpen()
 		fixAppleAppTitle()
 	}
 
