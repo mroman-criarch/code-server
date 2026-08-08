@@ -3,6 +3,21 @@
  * keyboard by mobile-keyboard.js, which sets the translateY offset.
  */
 
+:root {
+	/* Height occluded by the software keyboard plus the bar. Kept in sync by
+	   mobile-keyboard.js; zero whenever the keyboard is closed. */
+	--cs-keyboard-inset: 0px;
+}
+
+/*
+ * Shrink the workbench so its bottom rows are not hidden behind the keyboard.
+ * iOS does not reflow the page on its own, so without this the line you are
+ * typing in the terminal is exactly the line you cannot see.
+ */
+body.cs-mobile-keyboard-visible .monaco-workbench {
+	height: calc(100% - var(--cs-keyboard-inset)) !important;
+}
+
 .cs-mobile-keyboard {
 	position: fixed;
 	bottom: 0;

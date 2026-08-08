@@ -220,6 +220,10 @@
 	/**
 	 * Track the software keyboard. visualViewport shrinks when the keyboard opens;
 	 * that difference is the only reliable signal iOS Safari gives us.
+	 *
+	 * Beyond positioning the bar this also shrinks the workbench, because iOS does
+	 * not reflow the page for the software keyboard: without this the terminal's
+	 * last rows (the ones you are actually typing into) sit behind the keyboard.
 	 */
 	function trackViewport() {
 		const viewport = window.visualViewport
@@ -227,20 +231,43 @@
 			return
 		}
 
+		let lastInset = -1
+
 		const update = () => {
-			const occluded = window.innerHeight - viewport.height - viewport.offsetTop
+			const occluded = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
 			const keyboardOpen = occluded > 120
+			// The bar only takes space while it is displayed.
+			const inset = keyboardOpen ? occluded + barHeight() : 0
 
 			document.body.classList.toggle("cs-mobile-keyboard-visible", keyboardOpen)
 			if (bar) {
-				// Dock the bar to the top edge of the keyboard.
 				bar.style.transform = `translateY(${-occluded}px)`
+			}
+
+			if (inset !== lastInset) {
+				lastInset = inset
+				document.documentElement.style.setProperty("--cs-keyboard-inset", `${inset}px`)
+				// VS Code lays out from measured element sizes and only re-measures on
+				// resize, so the CSS change alone leaves the workbench stale.
+				window.dispatchEvent(new Event("resize"))
+			}
+
+			// iOS scrolls the whole document to reveal the focused field, which drags
+			// the fixed workbench out of view. Undo it; the shrink above already made
+			// room for the caret.
+			if (keyboardOpen && window.scrollY !== 0) {
+				window.scrollTo(0, 0)
 			}
 		}
 
 		viewport.addEventListener("resize", update)
 		viewport.addEventListener("scroll", update)
+		window.addEventListener("orientationchange", () => setTimeout(update, 300))
 		update()
+	}
+
+	function barHeight() {
+		return bar && bar.offsetHeight ? bar.offsetHeight : 52
 	}
 
 	function init() {
