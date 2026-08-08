@@ -365,6 +365,33 @@
 		}, 500)
 	}
 
+	/**
+	 * Label the home screen icon with the configured app name.
+	 *
+	 * iOS takes that label from apple-mobile-web-app-title, not from the web app
+	 * manifest, and the workbench ships that tag hardcoded to "Code" — so
+	 * --app-name reaches the manifest and the title bar but never the icon. The
+	 * name is read back from the product configuration the page already carries,
+	 * which avoids both a fetch and a patch to the HTML (a patch would mean
+	 * recompiling the VS Code build for a string).
+	 */
+	function fixAppleAppTitle() {
+		const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+		if (!meta) {
+			return
+		}
+		try {
+			const el = document.getElementById("vscode-workbench-web-configuration")
+			const config = JSON.parse(el.getAttribute("data-settings"))
+			const name = config.productConfiguration && config.productConfiguration.nameShort
+			if (name) {
+				meta.setAttribute("content", name)
+			}
+		} catch (e) {
+			/* Leave the shipped default rather than guess. */
+		}
+	}
+
 	function init() {
 		// Gate for every touch-only rule in the stylesheets. Set from JS rather
 		// than with a media query so that the CSS cannot apply on a desktop
@@ -374,6 +401,7 @@
 		build()
 		trackViewport()
 		nudgeNarrowLayout()
+		fixAppleAppTitle()
 	}
 
 	if (document.readyState === "loading") {
