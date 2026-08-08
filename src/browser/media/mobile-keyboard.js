@@ -392,6 +392,78 @@
 		}
 	}
 
+	/**
+	 * Bottom navigation, the way a phone app is navigated.
+	 *
+	 * Every shortcut in the workbench assumes a keyboard that a phone does not
+	 * have, which leaves the whole IDE reachable only through panels sized for a
+	 * desktop. These are the same commands, as thumb-sized targets.
+	 *
+	 * Each entry fires the command's own keybinding rather than poking at the
+	 * layout, so the workbench stays the one deciding what a view looks like.
+	 * Modifier comes from ctrlCmd(): these are all CtrlCmd bindings, which is
+	 * Meta on iOS.
+	 */
+	const NAV = [
+		{ label: "arquivos", icon: "files", key: "E", code: "KeyE", keyCode: 69, shiftKey: true },
+		{ label: "buscar", icon: "search", key: "F", code: "KeyF", keyCode: 70, shiftKey: true },
+		{ label: "abrir", icon: "go-to-file", key: "P", code: "KeyP", keyCode: 80 },
+		// Excecao: o toggle do terminal e Control+` mesmo em plataforma Apple —
+		// no macOS esse atalho nunca foi Cmd. Como no Linux tambem e Control,
+		// aqui a tecla e fixa em vez de sair do ctrlCmd().
+		{ label: "terminal", icon: "terminal", key: "`", code: "Backquote", keyCode: 192, ctrl: true },
+		{ label: "comandos", icon: "menu", key: "P", code: "KeyP", keyCode: 80, shiftKey: true },
+	]
+
+	let nav = null
+
+	function buildNav() {
+		nav = document.createElement("nav")
+		nav.className = "cs-mobile-nav"
+
+		for (const item of NAV) {
+			const button = document.createElement("button")
+			button.className = "cs-mobile-nav__item"
+			button.type = "button"
+			button.setAttribute("aria-label", item.label)
+
+			// Codicons ship with the workbench, so the bar looks like the rest of
+			// the UI and follows the active theme instead of pasted-in glyphs.
+			const icon = document.createElement("span")
+			icon.className = "codicon codicon-" + item.icon
+			const text = document.createElement("span")
+			text.className = "cs-mobile-nav__label"
+			text.textContent = item.label
+			button.appendChild(icon)
+			button.appendChild(text)
+
+			// pointerdown, not click: the workbench steals focus on tap and a
+			// 300ms-delayed click would land after the view already changed.
+			button.addEventListener(
+				"pointerdown",
+				(event) => {
+					event.preventDefault()
+					sendChord(
+						Object.assign(
+							{
+								key: item.key,
+								code: item.code,
+								keyCode: item.keyCode,
+								shiftKey: !!item.shiftKey,
+							},
+							item.ctrl ? { ctrlKey: true } : ctrlCmd(),
+						),
+					)
+				},
+				{ passive: false },
+			)
+
+			nav.appendChild(button)
+		}
+
+		document.body.appendChild(nav)
+	}
+
 	function init() {
 		// Gate for every touch-only rule in the stylesheets. Set from JS rather
 		// than with a media query so that the CSS cannot apply on a desktop
@@ -399,6 +471,7 @@
 		// decided, above, that this is a touch-only device.
 		document.body.classList.add("cs-mobile-touch")
 		build()
+		buildNav()
 		trackViewport()
 		nudgeNarrowLayout()
 		fixAppleAppTitle()

@@ -15,38 +15,96 @@
 }
 
 /*
- * Fit the workbench between the notch, the home indicator and the software
- * keyboard.
+ * The workbench is deliberately NOT resized here.
  *
- * Sizing happens here rather than with padding because the workbench parts are
- * absolutely positioned in pixels by the layout engine, which measures the
- * workbench element itself — padding would move the children out of step with
- * the measured box. mobile-keyboard.js fires a resize whenever the inset
- * changes so the engine re-measures.
+ * VS Code already handles the software keyboard on iOS: getClientArea() in
+ * base/browser/dom.ts returns visualViewport dimensions when platform.isIOS,
+ * and the visual viewport is exactly what the keyboard shrinks. So the layout
+ * engine lays out to the reduced height on its own.
  *
- * viewport-fit=cover (workbench.html patch) is what lets the page run under the
- * notch and the home indicator in the first place. In Safari the browser chrome
- * absorbs those areas and the insets resolve to zero; it is the PWA launched
- * from the home screen — no chrome at all — that actually needs this.
+ * Any CSS height override here subtracts the keyboard a *second* time — the
+ * engine sizes the grid to the shrunken viewport, then CSS shrinks the box
+ * around it again, and the bottom of the workbench (the terminal prompt, the
+ * line being typed) is clipped out of view with no way to scroll to it.
  *
- * max(): while the keyboard is open its inset already covers the home
- * indicator, because the key bar pads itself with safe-area-inset-bottom.
- *
- * Sizes are viewport units, never percentages. The workbench's parent is
- * <body>, which has no definite height, so `height: 100%` resolves against auto
- * and collapses the workbench to zero — a blank page, since every part inside
- * it is absolutely positioned. dvh/dvw resolve against the viewport itself and
- * are immune to that. They are also the dynamic variants, so they already track
- * Safari's collapsing address bar.
+ * What VS Code is missing is only the trigger: it reads visualViewport but does
+ * not listen to its resize event, and the software keyboard does not fire a
+ * window resize on iOS. mobile-keyboard.js supplies that event, which is why
+ * the tracking code stays even though this rule is gone.
  */
-body.cs-mobile-touch .monaco-workbench {
-	margin-top: env(safe-area-inset-top, 0px);
-	margin-left: env(safe-area-inset-left, 0px);
-	width: calc(100dvw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
-	height: calc(
-		100dvh - env(safe-area-inset-top, 0px) -
-			max(env(safe-area-inset-bottom, 0px), var(--cs-keyboard-inset))
-	) !important;
+
+/*
+ * Bottom navigation. Overlays the workbench rather than reserving space for
+ * itself: reserving would mean resizing the workbench, which is exactly what
+ * the comment above forbids.
+ *
+ * What it overlays is the status bar, which is hidden just below. Hiding it
+ * here rather than through workbench.statusBar.visible keeps the desktop —
+ * same user, same settings file, no touchscreen — with its status bar.
+ */
+body.cs-mobile-touch .monaco-workbench .part.statusbar {
+	display: none;
+}
+
+.cs-mobile-nav {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 999;
+
+	display: flex;
+	justify-content: space-around;
+	align-items: stretch;
+
+	/* Clears the iPhone home indicator. */
+	padding-bottom: env(safe-area-inset-bottom, 0px);
+
+	background: var(--vscode-editorWidget-background, #252526);
+	border-top: 1px solid var(--vscode-editorWidget-border, #454545);
+}
+
+/* While the keyboard is up the accessory key bar owns the bottom edge; two
+   stacked bars would eat half of what is left of the screen. */
+body.cs-mobile-keyboard-visible .cs-mobile-nav {
+	display: none;
+}
+
+.cs-mobile-nav__item {
+	flex: 1 1 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+
+	/* 44px is the iOS minimum touch target. */
+	min-height: 44px;
+	padding: 5px 0;
+
+	color: var(--vscode-foreground, #cccccc);
+	background: none;
+	border: none;
+
+	-webkit-tap-highlight-color: transparent;
+	-webkit-user-select: none;
+	user-select: none;
+	cursor: pointer;
+}
+
+.cs-mobile-nav__item:active {
+	background: var(--vscode-list-activeSelectionBackground, #094771);
+}
+
+.cs-mobile-nav__item .codicon {
+	font-size: 20px;
+}
+
+.cs-mobile-nav__label {
+	font-family: var(--vscode-font-family, sans-serif);
+	font-size: 10px;
+	line-height: 1;
+	opacity: 0.85;
 }
 
 .cs-mobile-keyboard {
