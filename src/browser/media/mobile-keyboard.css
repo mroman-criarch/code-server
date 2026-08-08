@@ -31,13 +31,20 @@
  *
  * max(): while the keyboard is open its inset already covers the home
  * indicator, because the key bar pads itself with safe-area-inset-bottom.
+ *
+ * Sizes are viewport units, never percentages. The workbench's parent is
+ * <body>, which has no definite height, so `height: 100%` resolves against auto
+ * and collapses the workbench to zero — a blank page, since every part inside
+ * it is absolutely positioned. dvh/dvw resolve against the viewport itself and
+ * are immune to that. They are also the dynamic variants, so they already track
+ * Safari's collapsing address bar.
  */
 body.cs-mobile-touch .monaco-workbench {
 	margin-top: env(safe-area-inset-top, 0px);
 	margin-left: env(safe-area-inset-left, 0px);
-	width: calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
+	width: calc(100dvw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
 	height: calc(
-		100% - env(safe-area-inset-top, 0px) -
+		100dvh - env(safe-area-inset-top, 0px) -
 			max(env(safe-area-inset-bottom, 0px), var(--cs-keyboard-inset))
 	) !important;
 }
